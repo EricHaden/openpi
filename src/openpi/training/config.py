@@ -384,11 +384,11 @@ class RLDSDroidDataConfig(DataConfigFactory):
             inputs=[
                 _transforms.RepackTransform(
                     {
-                        "observation/exterior_image_1_left": "observation/image",
-                        "observation/wrist_image_left": "observation/wrist_image",
-                        "observation/joint_position": "observation/joint_position",
-                        "observation/gripper_position": "observation/gripper_position",
-                        "actions": "actions",
+                        "observation/shoulder": "observation.images.shoulder",
+                        "observation/hand": "observation.images.hand",
+                        "observation/state": "observation.state",
+                        # "observation/gripper_position": "observation/gripper_position",
+                        "actions": "action",
                         "prompt": "prompt",
                     }
                 )
@@ -436,9 +436,8 @@ class LeRobotDROIDDataConfig(DataConfigFactory):
             inputs=[
                 _transforms.RepackTransform(
                     {
-                        "observation/exterior_image_1_left": "exterior_image_1_left",
-                        "observation/exterior_image_2_left": "exterior_image_2_left",
-                        "observation/wrist_image_left": "wrist_image_left",
+                        "observation/exterior_image_1_left": "shoulder_camera",
+                        "observation/wrist_image_left": "hand_camera",
                         "observation/joint_position": "joint_position",
                         "observation/gripper_position": "gripper_position",
                         "actions": "actions",
@@ -532,7 +531,7 @@ class TrainConfig:
     # device memory will be reduced but training could potentially be slower.
     # eg. if total device is 4 and fsdp devices is 2; then the model will shard to 2 devices and run
     # data parallel between 2 groups of devices.
-    fsdp_devices: int = 1
+    fsdp_devices: int = 4
 
     @property
     def assets_dirs(self) -> pathlib.Path:
@@ -904,17 +903,17 @@ _CONFIGS = [
         ),
         data=LeRobotDROIDDataConfig(
             # Replace with your custom DROID LeRobot dataset repo id.
-            repo_id="your_hf_username/my_droid_dataset",
+            repo_id="mixed_dataset",
             base_config=DataConfig(prompt_from_task=True),
             assets=AssetsConfig(
                 # Important: reuse the original DROID norm stats during fine-tuning!
-                assets_dir="gs://openpi-assets/checkpoints/pi05_droid/assets",
+                assets_dir="/global/home/hpc6206/",
                 asset_id="droid",
             ),
         ),
-        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
-        num_train_steps=20_000,
-        batch_size=32,
+        weight_loader=weight_loaders.CheckpointWeightLoader("/global/home/hpc6206/params"),
+        num_train_steps=20000,
+        batch_size=8,
     ),
     #
     # ALOHA Sim configs. This config is used to demonstrate how to train on a simple simulated environment.

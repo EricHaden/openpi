@@ -4,6 +4,7 @@ import dataclasses
 import enum
 import logging
 import pathlib
+import time
 from typing import Generic, TypeVar
 
 import augmax
@@ -304,16 +305,23 @@ def restore_params(
     Returns:
         The restored params.
     """
+    restore_start = time.monotonic()
     params_path = pathlib.Path(params_path).resolve() if not str(params_path).startswith("gs://") else params_path
+    logging.info("restore_params: starting (path=%s, restore_type=%s, dtype=%s)", params_path, restore_type, dtype)
 
     if restore_type is jax.Array and sharding is None:
         mesh = jax.sharding.Mesh(jax.devices(), ("x",))
         sharding = jax.sharding.NamedSharding(mesh, jax.sharding.PartitionSpec())
 
     with ocp.PyTreeCheckpointer() as ckptr:
+        metadata_start = time.monotonic()
+        logging.info("restore_params: reading checkpoint metadata...")
         metadata = ckptr.metadata(params_path)
+        logging.info("restore_params: metadata loaded in %.2fs", time.monotonic() - metadata_start)
         item = {"params": metadata["params"]}
 
+        restore_call_start = time.monotonic()
+        logging.info("restore_params: restoring checkpoint payload...")
         params = ckptr.restore(
             params_path,
             ocp.args.PyTreeRestore(
@@ -323,10 +331,18 @@ def restore_params(
                 ),
             ),
         )["params"]
+        logging.info("restore_params: checkpoint payload restored in %.2fs", time.monotonic() - restore_call_start)
 
     # If the params were saved with `save_state` during openpi training, every key path will end with "value", which is
     # added by `nnx.State`. We remove the "value" suffix here and always return what NNX calls a "pure dict".
     flat_params = traverse_util.flatten_dict(params)
     if all(kp[-1] == "value" for kp in flat_params):
         flat_params = {kp[:-1]: v for kp, v in flat_params.items()}
+    
+    logging.info(
+        "restore_params: completed in %.2fs (leaf_count=%d)",
+        time.monotonic() - restore_start,
+        len(flat_params),
+    )
     return traverse_util.unflatten_dict(flat_params)
+    
